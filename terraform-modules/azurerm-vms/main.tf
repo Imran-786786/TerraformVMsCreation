@@ -44,7 +44,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_association
   network_security_group_id = azurerm_network_security_group.nsg[each.key].id
 }
 
-resource "azurerm_linux_virtual_machine" "example" {
+resource "azurerm_linux_virtual_machine" "vms" {
   for_each              = var.vm-map
   name                  = each.value.vm-name
   resource_group_name   = each.value.resource_group_name
@@ -68,3 +68,4 @@ resource "azurerm_linux_virtual_machine" "example" {
     version   = "latest"
   }
 }
+

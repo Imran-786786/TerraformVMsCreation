@@ -1,0 +1,118 @@
+trigger: none
+
+pool: mySytem
+
+stages:
+  - stage: unit_and_scan_checks
+    displayName: 'Unit and Scan Checks'
+    jobs:
+      - job: unit_and_scan_checks
+        displayName: 'Unit and Scan Checks'
+        steps:
+        - task: tfsec@1
+          displayName: 'Run tfsec'
+          inputs:
+            version: 'v1.26.0'
+            dir: '$(System.DefaultWorkingDirectory)/'
+        - task: CmdLine@2
+          displayName: 'Run CheckOv'
+          condition: always()
+          inputs:
+            script: 'checkov -d . -o junitxml --output-file $(Common.TestResultsDirectory)/'
+            workingDirectory: $(System.DefaultWorkingDirectory$(Common.TestResultsDirectory)/'
+        - task: CmdLine@2
+          displayName: 'Run Tflint'
+          condition: always()
+          inputs:
+            script: 'tflint --recursive --format=junit > $(Common.TestResultsDirectory)/tflint-results.xml'
+            workingDirectory: $(System.DefaultWorkingDirectory)/'
+        - task: PublishTestResults@2
+          displayName: 'Publish Test Results'
+          condition: Always()
+          inputs:
+            testResultsFormat: 'JUnit'
+            testResultsFiles: '$(Common.TestResultsDirectory)/*.xml'
+            searchFolder: '$(System.DefaultWorkingDirectory)/'
+            testRunTitle: 'checkov test results'
+  - stage: init_and_plan
+    displayName: 'Init and Plan'
+    jobs: 
+    - job: init_and_plan
+      displayName: 'Init and Plan'
+      steps:
+      - task: TerraformTaskV4@4
+        displayName: 'Init Task'
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/environment/dev'
+          backendServiceArm: 'UmarAzureConnection'
+          backendAzureRmResourceGroupName: 'Umar-B16-G18-RG'
+          backendAzureRmStorageAccountName: 'umar16g18stg'
+          backendAzureRmContainerName: 'imran'
+          backendAzureRmKey: 'dev.terraform.tfstate'
+      - task: TerraformTaskV4@4
+        displayName: 'Plan Task'
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/environment/dev'
+          environmentServiceNameAzureRM: 'UmarAzureConnection'
+
+  - stage: init_and_apply
+    displayName: 'Init and apply'
+    jobs:
+    - job: manual_approval
+      displayName: 'Manual Approval'
+      pool: server
+      steps:
+      - task: ManualValidation@0
+        inputs:
+          notifyUsers: imran.shafiq@live.com
+    - job: init_and_apply
+      displayName: 'init and apply'
+      dependsOn: manual_approval
+      steps:
+      - task: TerraformTaskV4@4
+        displayName: 'Init Task'
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/environment/dev'
+          backendServiceArm: 'UmarAzureConnection'
+          backendAzureRmResourceGroupName: 'Umar-B16-G18-RG'
+          backendAzureRmStorageAccountName: 'umar16g18stg'
+          backendAzureRmContainerName: 'imran'
+          backendAzureRmKey: 'dev.terraform.tfstate'
+      - task: TerraformTaskV4@4
+        displayName: 'Apply Task'
+        inputs:
+          provider: 'azurerm'
+          command: 'apply'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/environment/dev'
+          environmentServiceNameAzureRM: 'UmarAzureConnection'
+          commandOptions: '-auto-approve'
+          
+  - stage: Ansible_Configuration
+    displayName: "Configure Servers with Ansible"
+    dependsOn: Terraform_Provision
+    jobs:
+      - job: ansible
+        displayName: "Run Ansible Playbook"
+        steps:
+          # Download Terraform output
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: terraform-output
+              targetPath: $(WORK_DIR)
+
+          # Install Ansible
+          - script: |
+              sudo apt-get update
+              sudo apt-get install -y ansible
+            displayName: "Install Ansible"
+
+          # Run Ansible Playbook
+          - script: |
+              ansible-playbook -i $(WORK_DIR)/inventory.json $(WORK_DIR)/ansible/playbook.yml
+            displayName: "Run Ansible Playbook"
