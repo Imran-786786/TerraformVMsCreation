@@ -113,6 +113,6 @@ stages:
               terraform output -json vm-ip | jq '{all: {hosts: [. | to_entries[] | .value]}}' > $(System.DefaultWorkingDirectory)/environment/dev/inventory.json
             displayName: "Generate Ansible Inventory"
           - script: |
-              ansible-playbook -i $(System.DefaultWorkingDirectory)/environment/dev/inventory.json $(System.DefaultWorkingDirectory)/playbook.yml
+              ansible-playbook -i $(System.DefaultWorkingDirectory)/environment/dev/inventory.json $(System.DefaultWorkingDirectory)/playbook/install-ngnix.yml
             displayName: "Run Ansible Playbook"
 
