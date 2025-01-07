@@ -5,3 +5,7 @@ output "subnet-out" {
 output "vnet-out" {
   value = module.network-module.vnet-output
 }
+
+output "vm-ip" {
+  value = module.vm-module.vm-ip
+}

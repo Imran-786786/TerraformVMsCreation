@@ -19,13 +19,13 @@ stages:
           condition: always()
           inputs:
             script: 'checkov -d . -o junitxml --output-file $(Common.TestResultsDirectory)/'
-            workingDirectory: $(System.DefaultWorkingDirectory$(Common.TestResultsDirectory)/'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/$(Common.TestResultsDirectory)/'
         - task: CmdLine@2
           displayName: 'Run Tflint'
           condition: always()
           inputs:
             script: 'tflint --recursive --format=junit > $(Common.TestResultsDirectory)/tflint-results.xml'
-            workingDirectory: $(System.DefaultWorkingDirectory)/'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/'
         - task: PublishTestResults@2
           displayName: 'Publish Test Results'
           condition: Always()
@@ -92,27 +92,27 @@ stages:
           workingDirectory: '$(System.DefaultWorkingDirectory)/environment/dev'
           environmentServiceNameAzureRM: 'UmarAzureConnection'
           commandOptions: '-auto-approve'
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish Terraform Output'
+        inputs:
+          targetPath: '$(System.DefaultWorkingDirectory)/environment/dev'
+          artifactName: 'terraform-output'
           
   - stage: Ansible_Configuration
     displayName: "Configure Servers with Ansible"
-    dependsOn: Terraform_Provision
+    dependsOn: init_and_apply
     jobs:
       - job: ansible
         displayName: "Run Ansible Playbook"
         steps:
-          # Download Terraform output
           - task: DownloadPipelineArtifact@2
             inputs:
               artifactName: terraform-output
-              targetPath: $(WORK_DIR)
-
-          # Install Ansible
+              targetPath: '$(System.DefaultWorkingDirectory)/environment/dev'
           - script: |
-              sudo apt-get update
-              sudo apt-get install -y ansible
-            displayName: "Install Ansible"
-
-          # Run Ansible Playbook
+              terraform output -json vm-ip | jq '{all: {hosts: [. | to_entries[] | .value]}}' > $(System.DefaultWorkingDirectory)/environment/dev/inventory.json
+            displayName: "Generate Ansible Inventory"
           - script: |
-              ansible-playbook -i $(WORK_DIR)/inventory.json $(WORK_DIR)/ansible/playbook.yml
+              ansible-playbook -i $(System.DefaultWorkingDirectory)/environment/dev/inventory.json $(System.DefaultWorkingDirectory)/playbook.yml
             displayName: "Run Ansible Playbook"
+
